@@ -3,8 +3,6 @@
   Date: Wed January 21, 2015
   Lab1 Egg Timer
 */
-
-
 #include "ch.h"
 #include "hal.h"
 #include "test.h"
@@ -30,7 +28,6 @@ static THD_FUNCTION(flashingThread, arg) {
   }
   return 0;
 }
-
 /* Thread for timer:
 handles countdown and button clear */
 static THD_WORKING_AREA(waTimerThread, 128);

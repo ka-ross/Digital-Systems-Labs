@@ -1,0 +1,19 @@
+Kyle Ross(rosskyle)
+partner: Max Hollingsworth (mawholli)
+
+====IMPLEMENTATION====
+Our implementation included three threads:
+  1. User input
+  2. Time Counter/User button control
+  3. Blinking light
+  
+Our user input thread is triggered by the mere pressing of 's', and will only accept 5 digits. once the user presses 'enter', the value is set to a global variable. 
+
+The Timer thread monitors this global variable, that when idle, is set to -1. Once the value is set to a value greater than zero, the countdown begins. This thread subtracts the global variable by one and waits for a millisecond. This process is repeated until the value is zero, which is when all lights are turned on. If the user button is pressed, a flag is set so that the lights are turned off. 
+
+In the third thread, there is a light control that keeps the North LED blinking at 10hz. We know now that this thread could have been also placed in the second thread, but we did it separately. 
+
+====PROBLEMS====
+We spent more time this week than necessary, beacause we had sort of dug ourselves a hole. The first problem we had, we couldn't figure out why our global variable would not set. upon running a chprintf statement, it became more clear what our problem was. We had our global variable as a uint16_t, or unsigned int, however we were trying to set it to a signed -1. This inevitably created an issue in that we were unable to manipulate or appropriately use it. 
+
+Our second problem was that the North LED was in fact blinking but it was turning on and off so quickly that it was almost impossible to see. This was a product of the flag checking we were doing in the second thread. The third thread would turn the light on, and then our second thread(Which has a check if the timer is above 0, and if so to keep all lights off) was immediately turning it off. 

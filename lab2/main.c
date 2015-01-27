@@ -26,10 +26,11 @@
 #include <stdlib.h>
 
 #define UNUSED(x) (void)(x)
-char *light_state[] = {"off", "off","off","off","off","off","off","off","off","off","off"};
+char *light_state[] = {"off", "off","off","off","off","off","off","off"};
 int init_time = -1;
 int time = -1;
 int isRunning = 0;
+
 
 static THD_WORKING_AREA(waShell,2048);
 
@@ -39,11 +40,27 @@ static thread_t *shelltp1;
 static THD_WORKING_AREA(waCounterThread,128);
 static THD_FUNCTION(counterThread,arg) {
   UNUSED(arg);
+  int i = 8;
   while (TRUE) {
-    palSetPad(GPIOE, GPIOE_LED3_RED);
-    chThdSleepMilliseconds(500);
-    palClearPad(GPIOE, GPIOE_LED3_RED);
-    chThdSleepMilliseconds(500);
+    while(isRunning){
+    for ( i=9; i<16; i++) {
+      if(!isRunning){
+	palSetPad(GPIOE, i-1);
+	light_state[0] = "on";
+	break;
+      }
+      palSetPad(GPIOE, i);
+      light_state[(i-8)] = "on";
+      chThdSleepMilliseconds(125);
+      palClearPad(GPIOE, i);
+      light_state[(i-8)] = "off";
+      if (i == 15){
+	i = 7;
+      }
+    }
+    
+    }
+    chThdSleepMilliseconds(1);
   }
   return 0;
 }
@@ -52,20 +69,30 @@ static THD_WORKING_AREA(waTimerThread,128);
 static THD_FUNCTION(timerThread,arg) {
   UNUSED(arg);
   while (TRUE) {
+      int j;
     while(isRunning){
       if(time > 0){
 	time--;
+	if((time%1000)==0){
+	  chprintf((BaseSequentialStream*)&SD1, "\n\r%d...\n\r", time/1000);
+	    }
       } else if (time == 0){
 	time--;
-	 palSetPad(GPIOE, GPIOE_LED4_BLUE);
-	 palSetPad(GPIOE, GPIOE_LED3_RED);
-	 palSetPad(GPIOE, GPIOE_LED5_ORANGE);
-	 palSetPad(GPIOE, GPIOE_LED7_GREEN);
-	 palSetPad(GPIOE, GPIOE_LED9_BLUE);
-	 palSetPad(GPIOE, GPIOE_LED10_RED);
-	 palSetPad(GPIOE, GPIOE_LED8_ORANGE);
-	 palSetPad(GPIOE, GPIOE_LED6_GREEN);
+	isRunning = 0;
+	palSetPad(GPIOE, GPIOE_LED4_BLUE);
+	palSetPad(GPIOE, GPIOE_LED3_RED);
+	palSetPad(GPIOE, GPIOE_LED5_ORANGE);
+	palSetPad(GPIOE, GPIOE_LED7_GREEN);
+	palSetPad(GPIOE, GPIOE_LED9_BLUE);
+	palSetPad(GPIOE, GPIOE_LED10_RED);
+	palSetPad(GPIOE, GPIOE_LED8_ORANGE);
+	palSetPad(GPIOE, GPIOE_LED6_GREEN);
+	chprintf((BaseSequentialStream*)&SD1, "\n\rch>");
+	for(j=0; j<8; j++){
+	light_state[j]="on";
+	  }
       }
+      chThdSleepMilliseconds(1);
     }
     chThdSleepMilliseconds(1);
   }
@@ -83,29 +110,43 @@ static void cmd_timerSet(BaseSequentialStream *chp, int argc, char *argv[]){
       init_time = 0;
       time = 0;
       isRunning = 0;
-    }else if(i < 10000){
+    }else if(i <= 10000){
       init_time = i;
       time = i;
-      isRunning = 1;
+      isRunning = 0;
     }else if(i > 10000){
       init_time = 10000;
       time = 10000;
-      isRunning = 1;
+      isRunning = 0;
   }
-     chprintf(chp, "%s", argv[0]);
-    chprintf(chp, "%d", time);
+    // chprintf(chp, "%s\n", argv[0]);
+    chprintf(chp, "Timer set to: %d\n\r", time);
 }
 }
 
 static void cmd_timerReset(BaseSequentialStream *chp, int argc, char *argv[]){
   if(argc == 0) {
+    int j;
     time = init_time;
-    chprintf(chp, "Reset time to %d", init_time);
+    chprintf(chp, "Reset time to %d\n\r", init_time);
+     //all lights off
+      palClearPad(GPIOE, GPIOE_LED4_BLUE);
+      palClearPad(GPIOE, GPIOE_LED3_RED); 
+      palClearPad(GPIOE, GPIOE_LED5_ORANGE);
+      palClearPad(GPIOE, GPIOE_LED7_GREEN);
+      palClearPad(GPIOE, GPIOE_LED9_BLUE);
+      palClearPad(GPIOE, GPIOE_LED10_RED);
+      palClearPad(GPIOE, GPIOE_LED8_ORANGE);
+      palClearPad(GPIOE, GPIOE_LED6_GREEN);
+      for(j=0; j<8; j++){
+	light_state[j]="off";
+	  }
   }
 }
 
 static void cmd_timerStart(BaseSequentialStream *chp, int argc, char *argv[]){
   if (argc == 0){
+    int j;
     //all lights off
       palClearPad(GPIOE, GPIOE_LED4_BLUE);
       palClearPad(GPIOE, GPIOE_LED3_RED); 
@@ -115,14 +156,18 @@ static void cmd_timerStart(BaseSequentialStream *chp, int argc, char *argv[]){
       palClearPad(GPIOE, GPIOE_LED10_RED);
       palClearPad(GPIOE, GPIOE_LED8_ORANGE);
       palClearPad(GPIOE, GPIOE_LED6_GREEN);
-    isRunning = 1;
-    chprintf(chp, "Starting timer at %d", time);
+      for(j=0; j<8; j++){
+	light_state[j]="off";
+      }
+      isRunning = 1;
+    chprintf(chp, "Starting timer at %d\n\r", time);
   }
 }
 
 static void cmd_timerStop(BaseSequentialStream *chp, int argc, char *argv[]){
   if (argc == 0){
     //all lights off
+    /*
       palClearPad(GPIOE, GPIOE_LED4_BLUE);
       palClearPad(GPIOE, GPIOE_LED3_RED); //omitted for the flashing
       palClearPad(GPIOE, GPIOE_LED5_ORANGE);
@@ -131,115 +176,78 @@ static void cmd_timerStop(BaseSequentialStream *chp, int argc, char *argv[]){
       palClearPad(GPIOE, GPIOE_LED10_RED);
       palClearPad(GPIOE, GPIOE_LED8_ORANGE);
       palClearPad(GPIOE, GPIOE_LED6_GREEN);
+      for(j=0; j<8; j++){
+	light_state[j]="off";
+	}*/
     isRunning = 0;
-    chprintf(chp, "Timer stopped at %d...Collaborate and listen!", time);
+    chprintf(chp, "Timer stopped at %d...Collaborate and listen!\n\r", time);
   }  
 }
 
 static void cmd_timerGetTime(BaseSequentialStream *chp, int argc, char *argv[]){
   if (argc == 0){
-    chprintf(chp, "Remaining time: %d", time);
+    chprintf(chp, "Remaining time: %d\n\r", time);
   }
 }
 
 static void cmd_ledset(BaseSequentialStream *chp, int argc, char *argv[]){
-  if (argc == 2){
-    if (strcmp(argv[1],"on")==0){
-      if (strcmp(argv[0],"N")==0){
-	palSetPad(GPIOE, GPIOE_LED3_RED);
-	light_state[3] = "on";
-      }
-      if (strcmp(argv[0],"NE")==0){
-	palSetPad(GPIOE, GPIOE_LED5_ORANGE);
-	light_state[5] = "on";;
-      }
-      if (strcmp(argv[0],"E")==0){
-	palSetPad(GPIOE, GPIOE_LED7_GREEN);
-	light_state[7] = "on";;
-      }
-      if (strcmp(argv[0],"SE")==0){
-	palSetPad(GPIOE, GPIOE_LED9_BLUE);
-	light_state[9] = "on";;
-      }
-      if (strcmp(argv[0],"S")==0){
-	palSetPad(GPIOE, GPIOE_LED10_RED);
-	light_state[10] = "on";;
-      }
-      if (strcmp(argv[0],"SW")==0){
-	palSetPad(GPIOE, GPIOE_LED8_ORANGE);
-	light_state[8] = "on";;
-      }
-       if (strcmp(argv[0],"W")==0){
-	palSetPad(GPIOE, GPIOE_LED6_GREEN);
-	light_state[6] = "on";;
-      }
-        if (strcmp(argv[0],"NW")==0){
-	palSetPad(GPIOE, GPIOE_LED4_BLUE);
-	light_state[4] = "on";;
-      }
-    } else if (strcmp(argv[1],"off") == 0) {
-      if (strcmp(argv[0],"N")==0){
-	palClearPad(GPIOE, GPIOE_LED3_RED);
-	light_state[3] = "off";
-      }
-      if (strcmp(argv[0],"NE")==0){
-	palClearPad(GPIOE, GPIOE_LED5_ORANGE);
-	light_state[5] = "off";;
-      }
-      if (strcmp(argv[0],"E")==0){
-	palClearPad(GPIOE, GPIOE_LED7_GREEN);
-	light_state[7] = "off";;
-      }
-      if (strcmp(argv[0],"SE")==0){
-	palClearPad(GPIOE, GPIOE_LED9_BLUE);
-	light_state[9] = "off";;
-      }
-      if (strcmp(argv[0],"S")==0){
-	palClearPad(GPIOE, GPIOE_LED10_RED);
-	light_state[10] = "off";;
-      }
-      if (strcmp(argv[0],"SW")==0){
-	palClearPad(GPIOE, GPIOE_LED8_ORANGE);
-	light_state[8] = "off";;
-      }
-       if (strcmp(argv[0],"W")==0){
-	palClearPad(GPIOE, GPIOE_LED6_GREEN);
-	light_state[6] = "off";;
-      }
-        if (strcmp(argv[0],"NW")==0){
-	palClearPad(GPIOE, GPIOE_LED4_BLUE);
-	light_state[4] = "off";;
-      }
-    }
-  }
+char light;
+ if (argc == 2){
+   if(*argv[0] == 'N'){
+     if(*(argv[0]+1) == 'E'){
+       light = GPIOE_LED5_ORANGE;
+     } else if (*(argv[0]+1) == 'W'){
+       light = GPIOE_LED4_BLUE;
+     } else { light = GPIOE_LED3_RED;
+     }
+   } else if (*argv[0] == 'S') {
+     if(*(argv[0]+1) == 'E'){
+       light = GPIOE_LED9_BLUE;
+     } else if (*(argv[0]+1) == 'W'){
+       light = GPIOE_LED8_ORANGE;
+     } else { 
+       light = GPIOE_LED10_RED;
+     }
+   } else if (*argv[0] == 'E'){
+     light =  GPIOE_LED7_GREEN;
+   } else {
+     light =  GPIOE_LED6_GREEN;
+   }
+
+   if (strcmp(argv[1], "on")==0){
+       palSetPad(GPIOE, light); 
+       light_state[(light-8)] = "on";
+   } else if (strcmp(argv[1], "off") == 0){
+     palClearPad(GPIOE, light); 
+     light_state[(light-8)] = "off";
+   }
+ }
 }
 
 static void cmd_ledread(BaseSequentialStream *chp, int argc, char *argv[]){
-  if (argc == 1) {
-    if (strcmp(argv[0], "N") ==0) {
-	chprintf(chp, "State: %s", light_state[3]);
-    }
-    if (strcmp(argv[0], "NE") ==0) {
-	chprintf(chp, "State: %s", light_state[5]);
-    }
-    if (strcmp(argv[0], "E") ==0) {
-	chprintf(chp, "State: %s", light_state[7]);
-    }
-    if (strcmp(argv[0], "SE") ==0) {
-	chprintf(chp, "State: %s", light_state[9]);
-    }
-    if (strcmp(argv[0], "S") ==0) {
-	chprintf(chp, "State: %s", light_state[10]);
-    }
-    if (strcmp(argv[0], "SW") ==0) {
-	chprintf(chp, "State: %s", light_state[8]);
-    }
-    if (strcmp(argv[0], "W") ==0) {
-	chprintf(chp, "State: %s", light_state[6]);
-    }
-    if (strcmp(argv[0], "NW") ==0) {
-	chprintf(chp, "State: %s", light_state[4]);
-    }
+char light; 
+ if (argc == 1) {
+     if(*argv[0] == 'N'){
+     if(*(argv[0]+1) == 'E'){
+       light = GPIOE_LED5_ORANGE;
+     } else if (*(argv[0]+1) == 'W'){
+       light = GPIOE_LED4_BLUE;
+     } else { light = GPIOE_LED3_RED;
+     }
+   } else if (*argv[0] == 'S') {
+     if(*(argv[0]+1) == 'E'){
+       light = GPIOE_LED9_BLUE;
+     } else if (*(argv[0]+1) == 'W'){
+       light = GPIOE_LED8_ORANGE;
+     } else { 
+       light = GPIOE_LED10_RED;
+     }
+   } else if (*argv[0] == 'E'){
+     light =  GPIOE_LED7_GREEN;
+   } else {
+     light =  GPIOE_LED6_GREEN;
+   }
+     chprintf(chp, "Light state of %s is %s\n\r", argv[0], light_state[(light-8)]);
 
   }
 }
@@ -265,7 +273,8 @@ static const ShellCommand commands[] = {
   {"timerreset", cmd_timerReset},
   {"timerstart", cmd_timerStart},
   {"timerstop", cmd_timerStop},
-  {"timergettime", cmd_timerGetTime}
+  {"timergettime", cmd_timerGetTime},
+  {NULL, NULL}
 };
 
 
@@ -325,8 +334,7 @@ int main(void) {
   chEvtRegister(&shell_terminated, &tel, 0);
 
   shelltp1 = shellCreate(&shell_cfg1, sizeof(waShell), NORMALPRIO);
-  // chThdCreateStatic(waCounterThread, sizeof(waCounterThread), NORMALPRIO+1, counterThread, NULL); 
-  chThdCreateStatic(waTimerThread, sizeof(waTimerThread), NORMALPRIO+1, timerThread, NULL);
+  chThdCreateStatic(waCounterThread, sizeof(waCounterThread), NORMALPRIO+1, counterThread, NULL);  chThdCreateStatic(waTimerThread, sizeof(waTimerThread), NORMALPRIO+1, timerThread, NULL);
 
   while (TRUE) {
     chEvtDispatch(fhandlers, chEvtWaitOne(ALL_EVENTS));

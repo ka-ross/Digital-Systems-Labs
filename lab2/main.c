@@ -26,10 +26,11 @@
 #include <stdlib.h>
 
 #define UNUSED(x) (void)(x)
+//Tells the light state for each light
 char *light_state[] = {"off", "off","off","off","off","off","off","off"};
-int init_time = -1;
-int time = -1;
-int isRunning = 0;
+int init_time = -1;//for reset values, -1 means "not set"
+int time = -1;//for countdown, -1 means "not set"
+int isRunning = 0;//a flag used to communicate with threads whether or not the timer is running
 
 
 static THD_WORKING_AREA(waShell,2048);
@@ -40,27 +41,27 @@ static thread_t *shelltp1;
 static THD_WORKING_AREA(waCounterThread,128);
 static THD_FUNCTION(counterThread,arg) {
   UNUSED(arg);
-  int i = 8;
+  int i = 8;//used for looping 
   while (TRUE) {
     while(isRunning){
     for ( i=9; i<16; i++) {
-      if(!isRunning){
+      if(!isRunning){//if the timer stops running
 	palSetPad(GPIOE, i-1);
 	light_state[0] = "on";
-	break;
+	break;//gets out of the for loop
       }
-      palSetPad(GPIOE, i);
-      light_state[(i-8)] = "on";
+      palSetPad(GPIOE, i);//dynamically sets current light on
+      light_state[(i-8)] = "on";//turns state to "on"
       chThdSleepMilliseconds(125);
-      palClearPad(GPIOE, i);
-      light_state[(i-8)] = "off";
-      if (i == 15){
+      palClearPad(GPIOE, i);//turns current off
+      light_state[(i-8)] = "off";//light state is "off"
+      if (i == 15){//restart looping
 	i = 7;
       }
     }
     
     }
-    chThdSleepMilliseconds(1);
+    chThdSleepMilliseconds(1);//escapes thread for scheduler
   }
   return 0;
 }
@@ -72,13 +73,14 @@ static THD_FUNCTION(timerThread,arg) {
       int j;
     while(isRunning){
       if(time > 0){
-	time--;
+	time--;//counting down
 	if((time%1000)==0){
-	  chprintf((BaseSequentialStream*)&SD1, "\n\r%d...\n\r", time/1000);
+	  chprintf((BaseSequentialStream*)&SD1, "\n\r%d...\n\r", time/1000);//prints every second, and onscreen timer
 	    }
       } else if (time == 0){
 	time--;
 	isRunning = 0;
+	//all lights on
 	palSetPad(GPIOE, GPIOE_LED4_BLUE);
 	palSetPad(GPIOE, GPIOE_LED3_RED);
 	palSetPad(GPIOE, GPIOE_LED5_ORANGE);
@@ -88,20 +90,22 @@ static THD_FUNCTION(timerThread,arg) {
 	palSetPad(GPIOE, GPIOE_LED8_ORANGE);
 	palSetPad(GPIOE, GPIOE_LED6_GREEN);
 	chprintf((BaseSequentialStream*)&SD1, "\n\rch>");
+	//sets state for all lights
 	for(j=0; j<8; j++){
 	light_state[j]="on";
 	  }
       }
+      //used so that the thread waits 1 ms for timer
       chThdSleepMilliseconds(1);
     }
-    chThdSleepMilliseconds(1);
+    chThdSleepMilliseconds(1); //escapes for scheduler
   }
   return 0;
 }
 
 
 
- 
+//sets the timer to a given value
 static void cmd_timerSet(BaseSequentialStream *chp, int argc, char *argv[]){
   int i;
   if(argc == 1){
@@ -114,16 +118,15 @@ static void cmd_timerSet(BaseSequentialStream *chp, int argc, char *argv[]){
       init_time = i;
       time = i;
       isRunning = 0;
-    }else if(i > 10000){
+    }else if(i > 10000){//if greater than 10,000, it sets to 10000
       init_time = 10000;
       time = 10000;
       isRunning = 0;
   }
-    // chprintf(chp, "%s\n", argv[0]);
     chprintf(chp, "Timer set to: %d\n\r", time);
 }
 }
-
+//sets the timer to the init_time, and turns off all lights
 static void cmd_timerReset(BaseSequentialStream *chp, int argc, char *argv[]){
   if(argc == 0) {
     int j;
@@ -143,7 +146,7 @@ static void cmd_timerReset(BaseSequentialStream *chp, int argc, char *argv[]){
 	  }
   }
 }
-
+//starts timer, obviously.
 static void cmd_timerStart(BaseSequentialStream *chp, int argc, char *argv[]){
   if (argc == 0){
     int j;
@@ -163,57 +166,47 @@ static void cmd_timerStart(BaseSequentialStream *chp, int argc, char *argv[]){
     chprintf(chp, "Starting timer at %d\n\r", time);
   }
 }
-
+//stops the timer
 static void cmd_timerStop(BaseSequentialStream *chp, int argc, char *argv[]){
-  if (argc == 0){
-    //all lights off
-    /*
-      palClearPad(GPIOE, GPIOE_LED4_BLUE);
-      palClearPad(GPIOE, GPIOE_LED3_RED); //omitted for the flashing
-      palClearPad(GPIOE, GPIOE_LED5_ORANGE);
-      palClearPad(GPIOE, GPIOE_LED7_GREEN);
-      palClearPad(GPIOE, GPIOE_LED9_BLUE);
-      palClearPad(GPIOE, GPIOE_LED10_RED);
-      palClearPad(GPIOE, GPIOE_LED8_ORANGE);
-      palClearPad(GPIOE, GPIOE_LED6_GREEN);
-      for(j=0; j<8; j++){
-	light_state[j]="off";
-	}*/
+  if (argc == 0);
     isRunning = 0;
     chprintf(chp, "Timer stopped at %d...Collaborate and listen!\n\r", time);
   }  
 }
 
+//gets time left on time variable
 static void cmd_timerGetTime(BaseSequentialStream *chp, int argc, char *argv[]){
   if (argc == 0){
     chprintf(chp, "Remaining time: %d\n\r", time);
   }
 }
 
+//custom sets a led to ON or OFF
 static void cmd_ledset(BaseSequentialStream *chp, int argc, char *argv[]){
 char light;
  if (argc == 2){
-   if(*argv[0] == 'N'){
-     if(*(argv[0]+1) == 'E'){
+   if(*argv[0] == 'N'){//"Is the first character an 'N'?"
+     if(*(argv[0]+1) == 'E'){//checks if the second is an E
        light = GPIOE_LED5_ORANGE;
-     } else if (*(argv[0]+1) == 'W'){
+     } else if (*(argv[0]+1) == 'W'){//checks if second is a W
        light = GPIOE_LED4_BLUE;
-     } else { light = GPIOE_LED3_RED;
+     } else { light = GPIOE_LED3_RED;//else its simply N
      }
-   } else if (*argv[0] == 'S') {
-     if(*(argv[0]+1) == 'E'){
+   } else if (*argv[0] == 'S') {//first is S
+     if(*(argv[0]+1) == 'E'){//second is E
        light = GPIOE_LED9_BLUE;
-     } else if (*(argv[0]+1) == 'W'){
+     } else if (*(argv[0]+1) == 'W'){//second is W
        light = GPIOE_LED8_ORANGE;
      } else { 
-       light = GPIOE_LED10_RED;
+       light = GPIOE_LED10_RED;//just S
      }
-   } else if (*argv[0] == 'E'){
+   } else if (*argv[0] == 'E'){ // Simply E
      light =  GPIOE_LED7_GREEN;
-   } else {
+   } else { //first is West.
      light =  GPIOE_LED6_GREEN;
    }
 
+//light state changes
    if (strcmp(argv[1], "on")==0){
        palSetPad(GPIOE, light); 
        light_state[(light-8)] = "on";
@@ -224,6 +217,7 @@ char light;
  }
 }
 
+//delivers light state, using same method as led_set
 static void cmd_ledread(BaseSequentialStream *chp, int argc, char *argv[]){
 char light; 
  if (argc == 1) {
@@ -274,7 +268,7 @@ static const ShellCommand commands[] = {
   {"timerstart", cmd_timerStart},
   {"timerstop", cmd_timerStop},
   {"timergettime", cmd_timerGetTime},
-  {NULL, NULL}
+  {NULL, NULL}//used for mistakes or non-specified values
 };
 
 

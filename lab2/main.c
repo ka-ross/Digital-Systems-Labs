@@ -159,8 +159,8 @@ static void cmd_timerStop(BaseSequentialStream *chp, int argc, char *argv[]){
   if (argc == 0);
     isRunning = 0;
     chprintf(chp, "Timer stopped at %d...Collaborate and listen!\n\r", time);
-  }  
-}
+}  
+
 
 //gets time left on time variable
 static void cmd_timerGetTime(BaseSequentialStream *chp, int argc, char *argv[]){

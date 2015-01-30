@@ -1,4 +1,7 @@
 /*
+
+  rosskyle & dianyu
+
     ChibiOS - Copyright (C) 2006-2014 Giovanni Di Sirio
 
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -109,6 +112,67 @@ static THD_FUNCTION(counterThread,arg) {
   }
   return 0;
 }
+static void cmd_press(BaseSequentialStream *chp, int argc, char *argv[]) {
+  uint8_t address = (uint8_t) strtol(argv[1],NULL, 16);
+  uint8_t value = (uint8_t)atoi(argv[2]);
+
+ if(*argv[0] == 'r'){
+   if(*argv[1] == 'a') {
+     uint8_t i = 0;//First control register
+     uint8_t j = 0;
+     uint8_t k = 0;
+     
+     chprintf((BaseSequentialStream*)&SD1, "         0    1    2    3    4    5    6    7    8    9    A    B    C    D    E    F  \n\r");
+    
+     for (i=0; i<5; i++){
+        chprintf((BaseSequentialStream*)&SD1, "0x%02x0 |", i);
+       for(j=0; j<16; j++){
+	chprintf((BaseSequentialStream*)&SD1, " %03i ", pressure_read_register(k));
+	k++;
+       //chprintf((BaseSequentialStream*)&SD1, "    %02x   |  0x%02x\n\r", i, gyro_read_register(i));
+       }
+       chprintf((BaseSequentialStream*)&SD1, "\n\r");
+     }
+   }
+   chprintf((BaseSequentialStream*)&SD1, "Read Byte = 0x%02x\n\r",pressure_read_register(address));
+   chprintf((BaseSequentialStream*)&SD1, "read byte = %d \n\r",pressure_read_register(address));
+ } else if ( *argv[0] == 'w') {
+   pressure_write_register(address, value);
+   chprintf((BaseSequentialStream*)&SD1, "Wrote Byte = %d at 0x%02x\n\r", value, address);
+ }
+
+}
+
+static void cmd_gyro(BaseSequentialStream *chp, int argc, char *argv[]) {
+  uint8_t address = (uint8_t) strtol(argv[1],NULL, 16);
+  uint8_t value = (uint8_t)atoi(argv[2]);
+
+ if(*argv[0] == 'r'){
+   if(*argv[1] == 'a') {
+     uint8_t i = 0;//First control register
+     uint8_t j = 0;
+     uint8_t k = 0;
+     
+     chprintf((BaseSequentialStream*)&SD1, "         0    1    2    3    4    5    6    7    8    9    A    B    C    D    E    F  \n\r");
+    
+     for (i=0; i<4; i++){
+        chprintf((BaseSequentialStream*)&SD1, "0x%02x0 |", i);
+       for(j=0; j<16; j++){
+	chprintf((BaseSequentialStream*)&SD1, " %03i ", gyro_read_register(k));
+	k++;
+       //chprintf((BaseSequentialStream*)&SD1, "    %02x   |  0x%02x\n\r", i, gyro_read_register(i));
+       }
+       chprintf((BaseSequentialStream*)&SD1, "\n\r");
+     }
+   }
+   chprintf((BaseSequentialStream*)&SD1, "Read Byte = 0x%02x\n\r",gyro_read_register(address));
+   chprintf((BaseSequentialStream*)&SD1, "read byte = %d \n\r",gyro_read_register(address));
+ } else if ( *argv[0] == 'w') {
+   gyro_write_register(address, value);
+   chprintf((BaseSequentialStream*)&SD1, "Wrote Byte = %d at 0x%02x\n\r", value, address);
+ }
+}
+
 
 static void cmd_myecho(BaseSequentialStream *chp, int argc, char *argv[]) {
   int32_t i;
@@ -122,6 +186,8 @@ static void cmd_myecho(BaseSequentialStream *chp, int argc, char *argv[]) {
 
 static const ShellCommand commands[] = {
   {"myecho", cmd_myecho},
+  {"gyro", cmd_gyro},
+  {"press", cmd_press},
   {NULL, NULL}
 };
 

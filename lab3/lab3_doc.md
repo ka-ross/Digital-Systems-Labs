@@ -1,7 +1,8 @@
-@Authors Dian Yu (Dianyu) & Kyle Ross(Rosskyle)
+#LAB 3
+### Authors Dian Yu (Dianyu) & Kyle Ross(Rosskyle)
 
 
-
+### GYRO READ/WRITE
 **uint8_t gyro_read_register (uint8_t address)**
 
 reads the address from gyro in uinr8_t and returns the value at that address. 
@@ -14,14 +15,14 @@ helps write value/data into an address in uint8_t.
 
 
 
-
+### HELPER FUNCTIONS
 **static double get_pressure()**
 * Used to get the pressure of the atmosphere currently.
 * when called, the function runs the necessary calls for “One-Shot” measurements.
 * since the data is stored in only 8-bits at a time, the high(“h”), low(“l”), and extra-low(“xl”) values are appropriately shifted and combined for an accurate reading.
 
 
-
+###PRESSURE READ/WRITE
 **uint8_t pressure_read_register (uint8_t address) **
 * It takes in an address and retrieves that value that is stored at the register of the given address, it then returns this address
 * This function utilizes connection across the SPI.
@@ -33,7 +34,7 @@ helps write value/data into an address in uint8_t.
 * This function utilizes connection across the SPI.
  
 
-
+### SHELL COMMANDS
 **static void cmd_press(BaseSequentialStream *chp, int argc, char *argv[]) **
 * Function uses the input given through the shell input.
 * the use of this command is to specify whether to use the pressure_read_register(input as ‘r’), or the pressure_write_register(input as ‘w’). the input is read and the function will read the value of a register, or write a value to a register accordingly. also outputs a print statement. 
@@ -65,13 +66,13 @@ helps write value/data into an address in uint8_t.
 * cmd_myecho function is the function with original pulled file. It’s a test and sample function to show how to read and print the input from command shell.
 
 
-
+####Shell Command Aliasing
 **static const ShellCommand commands[]**
 
- * This function displays all the tolerated command lines in this main. We added {“gyro”, cmd_gyro} to get gyro {r/w} {address} {value} and gyro r all; {“press”, cmd_press} to get press {r/w} {address} {value} and press r all; {“altitude”, cmd_alti} to get the altitude {f/m}; and {“alt”, cmd_alti} for simpler version of altitude.
+* This function displays all the tolerated command lines in this main. We added {“gyro”, cmd_gyro} to get gyro {r/w} {address} {value} and gyro r all; {“press”, cmd_press} to get press {r/w} {address} {value} and press r all; {“altitude”, cmd_alti} to get the altitude {f/m}; and {“alt”, cmd_alti} for simpler version of altitude.
 
 
-
+### MAIN
 **int main(void)**
 
 * In the main function, it initializes HAL, Kernel and configures device drivers. 

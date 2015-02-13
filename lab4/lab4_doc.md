@@ -100,8 +100,8 @@ The log thread prints out the value of pressure, current altitude values readed 
 **static const ShellCommand commands[]**
 
 * This function displays all the tolerated command lines in this main. 
-*We added {“gyro”, cmd_gyro} to get gyro {r/w} {address} {value} and gyro r all; 
-*{“press”, cmd_press} to get press {r/w} {address} {value} and press r all;
+* We added {“gyro”, cmd_gyro} to get gyro {r/w} {address} {value} and gyro r all; 
+* {“press”, cmd_press} to get press {r/w} {address} {value} and press r all;
 * {“altitude”, cmd_alti} to get the altitude {f/m}; and {“alt”, cmd_alti} for simpler version of altitude; 
 *{“data”, cmd_dataPrint} to print all the altitude value memorized in the press_ft array.
 

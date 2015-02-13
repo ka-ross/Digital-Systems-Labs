@@ -6,8 +6,6 @@
 This is a depiction of the results we received during our lab. The three graphs to the left depict each elevator individually, and the middle is the three put up against one another. The numbers on the larger graph are re-scaled so that they reflect the same scale. The last graph on the right is to show that based on the fastest speed gathered, how far each elevator would travel within a second. As you can see, Ballantine Hall is the fastest by far amongst the three elevators we tested. Both Swain and Lindley are very similar in speeds but Lindley proved to be the slowest of the three. 
 
 
-Mark: Add GLOBAL VARIABLES, ALTITUDE LOG, static void cmd_dataPrint in SHELL COMMANDS, and {“data”, cmd_dataPrint} in Shell Command Aliasing
-
 ### Global Variables
 **isLogging**
 

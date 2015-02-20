@@ -16,6 +16,8 @@
     limitations under the License.
 */
 
+//RX
+
 #include "ch.h"
 #include "hal.h"
 #include "chprintf.h"
@@ -86,7 +88,7 @@ void initNRF24L01(NRF24L01Driver *nrfp) {
   nrf24l01SetTXAddress(nrfp, addr);
   nrf24l01SetRXAddress(nrfp, 0, addr);
   nrf24l01SetPayloadSize(nrfp, 0, 32);
-  nrf24l01SetChannel(nrfp, 10);
+  nrf24l01SetChannel(nrfp, 11);
  
   nrf24l01FlushRX(nrfp);
   nrf24l01FlushTX(nrfp);

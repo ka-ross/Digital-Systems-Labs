@@ -87,7 +87,7 @@ void initNRF24L01(NRF24L01Driver *nrfp) {
   nrf24l01SetTXAddress(nrfp, addr);
   nrf24l01SetRXAddress(nrfp, 0, addr);
   nrf24l01SetPayloadSize(nrfp, 0, 32);
-  nrf24l01SetChannel(nrfp, 10);
+  nrf24l01SetChannel(nrfp, 11);
  
   nrf24l01FlushRX(nrfp);
   nrf24l01FlushTX(nrfp);
@@ -132,7 +132,7 @@ int main(void) {
   initNRF24L01(&nrf24l01);
 
   for (i=0;i<32;i++) {
-    serialOutBuf[i] = i;
+    serialOutBuf[i] = 3;
   }
 
   for (;;) {

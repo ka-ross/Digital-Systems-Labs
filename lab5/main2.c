@@ -22,6 +22,7 @@
 #include "hal.h"
 #include "chprintf.h"
 #include "nrf24l01.h"
+#include <shell.h> 
 
 #define UNUSED(x) (void)(x)
 
@@ -68,9 +69,17 @@ static const EXTConfig extcfg = {
   }
 };
 
+//GLOBAL VARIABLES
+int isLogging = 0;//checks if the user button was pressed. defaults to 0.
+int press_ft[3500];
+//int press_m[3];
+//int press_time[3];
+int counter = 0;
+int channel= 0;
 static NRF24L01Driver nrf24l01;
 static mutex_t nrfMutex;
 static const uint8_t addr[5] = "METEO";
+static uint8_t target_addr[5] = "METEO";
 static uint8_t serialOutBuf[32];
 
 static void nrfExtCallback(EXTDriver *extp, expchannel_t channel) {
@@ -100,6 +109,28 @@ void initNRF24L01(NRF24L01Driver *nrfp) {
   nrf24l01PowerUp(nrfp);
 }
 
+static msg_t receiverThread(void *arg) {
+  int i;
+  UNUSED (arg);
+  chRegSetThreadName("receiver");
+  
+  while (TRUE) {
+    chMtxLock(&nrfMutex);
+    size_t s = chnReadTimeout(&nrf24l01.channels[0], serialInBuf, 32, MS2ST(10));
+    chMtxUnlock(&nrfMutex);
+    if (s) {
+      for (i=0;i<(int)s;i++) {
+      	chprintf((BaseSequentialStream*)&SD1, "%d ", serialInBuf[i]);
+      }
+      chprintf((BaseSequentialStream*)&SD1, "\n\r", s);
+    }
+    chSchDoYieldS();
+  }
+  return 0;
+}
+
+
+
 int main(void) {
   halInit();
   chSysInit();
@@ -126,10 +157,23 @@ int main(void) {
 
   chMtxObjectInit(&nrfMutex);
 
+  //FROM RX---
+  extStart(&EXTD1, &extcfg);
+  //---
+
   nrf24l01ObjectInit(&nrf24l01);
   nrf24l01Start(&nrf24l01, &nrf24l01Config);
   
+  //FROM RX ---
+  extChannelEnable(&EXTD1, 3);
+  //-----
+  
   initNRF24L01(&nrf24l01);
+
+
+  //FROM RX---
+  chThdCreateStatic(recieverWorkingArea, sizeof(recieverWorkingArea), NORMALPRIO, receiverThread, NULL);
+  //FROM RX^^^^
 
   for (i=0;i<32;i++) {
     serialOutBuf[i] = 3;

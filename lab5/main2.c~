@@ -22,6 +22,7 @@
 #include "hal.h"
 #include "chprintf.h"
 #include "nrf24l01.h"
+#include <shell.h> 
 
 #define UNUSED(x) (void)(x)
 

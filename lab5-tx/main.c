@@ -85,12 +85,17 @@ int counter = 0;
 int channel = 10;
 static NRF24L01Driver nrf24l01;
 static mutex_t nrfMutex;
-static uint8_t addr[5] = "METEO";
-static uint8_t target_addr[5] = "METEO";
+static uint8_t addr[5] = "atlas";
+static uint8_t target_addr[5] = "atlas";
 static uint8_t serialOutBuf[32];
 static uint8_t serialInBuf[32];
+static uint8_t rec_list[10][26];
+static iter = 0;
+static fifo = 0;
 int msg_seq = 1;
 int msg_type = 0;
+int ack_flag = 0;
+int wait_for_ack = 0;
 
 static void nrfExtCallback(EXTDriver *extp, expchannel_t channel) {
   UNUSED(extp);
@@ -137,11 +142,54 @@ static msg_t receiverThread(void *arg) {
     chMtxLock(&nrfMutex);
     size_t s = chnReadTimeout(&nrf24l01.channels[0], serialInBuf, 32, MS2ST(10));
     chMtxUnlock(&nrfMutex);
+
     if (s) {
-      for (i=0;i<(int)s;i++) {
-      	chprintf((BaseSequentialStream*)&SD1, "%d ", serialInBuf[i]);
+      if(!wait_for_ack){
+	//	serialOutBuf[0]= serialInBuf[0];
+	serialInBuf[8]= 1;
+
+	for(i=0; i<5; i++){
+	  target_addr[i] = serialInBuf[2+i];
+	} 
+	nrf24l01SetTXAddress(&nrf24l01, target_addr);
+	chMtxLock(&nrfMutex);
+	chnWriteTimeout(&nrf24l01.channels[0], serialInBuf, 32, MS2ST(100));
+	chMtxUnlock(&nrfMutex);
+
+	if(wait_for_ack){
+	  break;
+	}
+    
+	for(i=0;i<5; i++){
+	  rec_list[iter][i] = serialInBuf[2+i];
+	  } 
+	rec_list[iter][5] = serialInBuf[10];
+	
+	for(i=0; i<(serialInBuf[10]);i++){
+	  rec_list[iter][6+i] = serialInBuf[12+i];
+	}
+	
+	iter = (iter+1)%10;
+	
+	
+	for (i=0;i<(int)s;i++) {
+	  chprintf((BaseSequentialStream*)&SD1, "%c ", serialInBuf[i]);
+	}
+	chprintf((BaseSequentialStream*)&SD1, "\n\r", s);
+    
+	
       }
-      chprintf((BaseSequentialStream*)&SD1, "\n\r", s);
+
+
+      if(wait_for_ack){
+	if((serialInBuf[0] = msg_seq) && (serialInBuf[8]==1)){
+	  wait_for_ack = 0;
+	  chprintf((BaseSequentialStream*)&SD1, "Acknowledged.\n\r");
+	  
+	}
+	//else keep trying to send. 
+      }
+    
     }
     chSchDoYieldS();
   }
@@ -351,25 +399,60 @@ static void cmd_nrf(BaseSequentialStream *chp, int argc, char *argv[]) {
     int i=0;
     for(i; i<5; i++){
       target_addr[i] = *(argv[1] + i);
-      }
+    }
     chprintf((BaseSequentialStream*)&SD1, "%s.\n\r", target_addr);
     //chprintf((BaseSequentialStream*)&SD1, "Sending...");
     nrf24l01SetTXAddress(&nrf24l01, target_addr);
     int msg_size = strlen(argv[2]);
+    serialOutBuf[0] = msg_seq;
     serialOutBuf[7] = ',';
     serialOutBuf[8] = msg_type;
     serialOutBuf[9] = ',';
     serialOutBuf[10] = msg_size;
     serialOutBuf[11] = ',';
+
     for(i=0;i<(msg_size);i++){
       serialOutBuf[i+12] = *(argv[2] + i);
     }
-    chprintf((BaseSequentialStream*)&SD1, "about to send.\n\r");
-    chMtxLock(&nrfMutex);
-    chnWriteTimeout(&nrf24l01.channels[0], serialOutBuf, 32, MS2ST(100));
-    chMtxUnlock(&nrfMutex);
-    chprintf((BaseSequentialStream*)&SD1, "sent to %s on Channel %d.\n\r", target_addr, channel);
-    chprintf((BaseSequentialStream*)&SD1, "message %s\n\r", serialOutBuf);
+    wait_for_ack = 1;
+    for(i=0; i<5; i++){
+      chMtxLock(&nrfMutex);
+      chnWriteTimeout(&nrf24l01.channels[0], serialOutBuf, 32, MS2ST(100));
+      chMtxUnlock(&nrfMutex);
+      chThdSleepMilliseconds(200);
+      if (!wait_for_ack) break;
+      chprintf((BaseSequentialStream*)&SD1, "failed to send %d\n\r", i);
+    }
+    msg_seq = msg_seq ^ 1;
+  }
+
+  else if(*(argv[0]) == 'r'){
+      if (*(argv[1]) == 'l'){
+	int i,j;
+	for(i=0; i<iter; i++){
+	  chprintf((BaseSequentialStream*)&SD1, "%d. <", i+1);
+	  for(j=0; j<5; j++){
+	    chprintf((BaseSequentialStream*)&SD1, "%c", rec_list[(iter-1)-i][j]);
+	  }
+	  chprintf((BaseSequentialStream*)&SD1, ">, <%d> \n\r", rec_list[(iter-1)-i][5]); 
+	}
+      }else{
+	int j;
+	fifo = (fifo+1)%10;
+	if(fifo != iter){
+	  for(j=0; j<5; j++){
+	    chprintf((BaseSequentialStream*)&SD1, "%c", rec_list[fifo][j]);
+	  }
+	  chprintf((BaseSequentialStream*)&SD1, ": " ); 
+	  for(j=0; j<(serialInBuf[10]);j++){
+	    chprintf((BaseSequentialStream*)&SD1, "%c ",  serialInBuf[12+j]);
+	  }
+	  chprintf((BaseSequentialStream*)&SD1, "\n\r");
+	}
+	for(j=0; j<26; j++){
+	rec_list[fifo][j] = 0;
+	}
+      }
   }
 }
 

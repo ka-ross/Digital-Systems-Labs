@@ -1,37 +1,35 @@
 /*
+    Some Device Drivers for ChibiOS/RT
 
-  Title: Lab 5 - Nordic Wireless
-  Completed: 2//15
-  @author: rosskyle
- 
+    Copyright (C) 2014 Konstantin Oblaukhov
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
 */
+
+// TX Example 
+
 #include "ch.h"
 #include "hal.h"
-#include "test.h"
-#include "shell.h" 
 #include "chprintf.h"
-#include <chstreams.h>
-#include <string.h>
+#include "nrf24l01.h"
+#include "shell.h"
+#include "test.h"
 #include <stdio.h>
 #include <stdarg.h>
-#include <math.h>
+#include <chstreams.h>
+ 
 
 #define UNUSED(x) (void)(x)
-
-//GLOBAL VARIABLES
-int isLogging = 0;//checks if the user button was pressed. defaults to 0.
-int press_ft[3500];
-//int press_m[3];
-//int press_time[3];
-int counter = 0;
-int channel= 0;
-uint_8t addr[5] = "KYLER";
-static uint_8t target_addr[5] = "KYLER"
-static NRF24L01Driver nrf24l01;
-static mutex_t nrfMutex;
-static uint8_t serialOutBuf[32];
-uint8_t msg_sequence = 10101010;
-
 
 static const SPIConfig nrf24l01SPI = {
     NULL,
@@ -76,6 +74,28 @@ static const EXTConfig extcfg = {
   }
 };
 
+static THD_WORKING_AREA(recieverWorkingArea, 128);
+
+//GLOBAL VARIABLES
+int isLogging = 0;//checks if the user button was pressed. defaults to 0.
+int press_ft[3500];
+//int press_m[3];
+//int press_time[3];
+int counter = 0;
+int channel = 10;
+static NRF24L01Driver nrf24l01;
+static mutex_t nrfMutex;
+static uint8_t addr[5] = "atlas";
+static uint8_t target_addr[5] = "atlas";
+static uint8_t serialOutBuf[32];
+static uint8_t serialInBuf[32];
+static uint8_t rec_list[10][26];
+static iter = 0;
+static fifo = 0;
+int msg_seq = 1;
+int msg_type = 0;
+int ack_flag = 0;
+int wait_for_ack = 0;
 
 static void nrfExtCallback(EXTDriver *extp, expchannel_t channel) {
   UNUSED(extp);
@@ -88,7 +108,7 @@ void initNRF24L01(NRF24L01Driver *nrfp) {
   nrf24l01EnableDynamicSize(nrfp);
   nrf24l01EnableDynamicPipeSize(nrfp, 0x3f);
   
-  nrf24l01SetTXAddress(nrfp, addr);
+  nrf24l01SetTXAddress(nrfp, target_addr);
   nrf24l01SetRXAddress(nrfp, 0, addr);
   nrf24l01SetPayloadSize(nrfp, 0, 32);
   nrf24l01SetChannel(nrfp, channel);
@@ -102,9 +122,81 @@ void initNRF24L01(NRF24L01Driver *nrfp) {
   chprintf((BaseSequentialStream*)&SD1, "AA = 0x%02x\n\r",retdata);
   
   nrf24l01PowerUp(nrfp);
+
+  serialOutBuf[0] = msg_seq;
+  serialOutBuf[1] = ',';
+  serialOutBuf[2] = addr[0];
+  serialOutBuf[3] = addr[1];
+  serialOutBuf[4] = addr[2];
+  serialOutBuf[5] = addr[3];
+  serialOutBuf[6] = addr[4];
+     
 }
 
-int channel = 0; //Global variable for setting channel
+static msg_t receiverThread(void *arg) {
+  int i;
+  UNUSED (arg);
+  chRegSetThreadName("receiver");
+  
+  while (TRUE) {
+    chMtxLock(&nrfMutex);
+    size_t s = chnReadTimeout(&nrf24l01.channels[0], serialInBuf, 32, MS2ST(10));
+    chMtxUnlock(&nrfMutex);
+
+    if (s) {
+      if(!wait_for_ack){
+	//	serialOutBuf[0]= serialInBuf[0];
+	serialInBuf[8]= 1;
+
+	for(i=0; i<5; i++){
+	  target_addr[i] = serialInBuf[2+i];
+	} 
+	nrf24l01SetTXAddress(&nrf24l01, target_addr);
+	chMtxLock(&nrfMutex);
+	chnWriteTimeout(&nrf24l01.channels[0], serialInBuf, 32, MS2ST(100));
+	chMtxUnlock(&nrfMutex);
+
+	if(wait_for_ack){
+	  break;
+	}
+    
+	for(i=0;i<5; i++){
+	  rec_list[iter][i] = serialInBuf[2+i];
+	  } 
+	rec_list[iter][5] = serialInBuf[10];
+	
+	for(i=0; i<(serialInBuf[10]);i++){
+	  rec_list[iter][6+i] = serialInBuf[12+i];
+	}
+	
+	iter = (iter+1)%10;
+	
+	
+	for (i=0;i<(int)s;i++) {
+	  chprintf((BaseSequentialStream*)&SD1, "%c ", serialInBuf[i]);
+	}
+	chprintf((BaseSequentialStream*)&SD1, "\n\r", s);
+    
+	
+      }
+
+
+      if(wait_for_ack){
+	if((serialInBuf[0] = msg_seq) && (serialInBuf[8]==1)){
+	  wait_for_ack = 0;
+	  chprintf((BaseSequentialStream*)&SD1, "Acknowledged.\n\r");
+	  
+	}
+	//else keep trying to send. 
+      }
+    
+    }
+    chSchDoYieldS();
+  }
+  return 0;
+}
+
+
 static THD_WORKING_AREA(waShell,2048);
 static thread_t *shelltp1;
 /* SPI configuration, sets up PortA Bit 8 as the chip select for the pressure sensor */
@@ -198,7 +290,6 @@ static THD_FUNCTION(blinkerThread,arg) {
   return 0;
 }
 
-
 static THD_WORKING_AREA(waButtonThread,128);
 static THD_FUNCTION(buttonThread,arg) {
   UNUSED(arg);
@@ -232,7 +323,7 @@ static THD_WORKING_AREA(waLogThread,128);
 static THD_FUNCTION(logThread,arg) {
   UNUSED(arg);
   while(TRUE){
-
+    
     //  int i =0;
     while (isLogging && counter < 3500) {
 
@@ -241,15 +332,12 @@ static THD_FUNCTION(logThread,arg) {
       chprintf((BaseSequentialStream*)&SD1, "1. %04d\n\r ", (int)press);//time stamp.
 
       //=(1-(A18/1013.25)^0.190284)*145366.45
-      double altitude_ft = (1-pow((press/1013.25),0.190284))*145366.45;
+      double altitude_ft = (1-((press/1013.25),0.190284))*145366.45;//took out "pow"
       //converts to Altitude measurement
 
-    
       //converts above value to int for printing purposes
       int final_ft = (int) altitude_ft;
 	
-
-
       chprintf((BaseSequentialStream*)&SD1, "2.  %04d\n\r ", final_ft);//time stamp.
 
       press_ft[counter]= final_ft;
@@ -259,7 +347,7 @@ static THD_FUNCTION(logThread,arg) {
 
       chprintf((BaseSequentialStream*)&SD1, "3.  %04d\n\r ",final_m);//time stamp.
       chprintf((BaseSequentialStream*)&SD1, "array.  %04d\n\r ",press_ft[counter]);//aray value
-      chprintf((BaseSequentialStream*)&SD1, "iterater.  %04d\n\r ",counter);//i.
+      chprintf((BaseSequentialStream*)&SD1, "iterator.  %04d\n\r ",counter);//i.
 
       counter++;
       chThdSleepMilliseconds(1); //escape for scheduler.
@@ -273,29 +361,100 @@ static THD_FUNCTION(logThread,arg) {
 
 //Wireless 
 static void cmd_nrf(BaseSequentialStream *chp, int argc, char *argv[]) {
-  if(*argv[0] == 'c'){
-    channel = atoi(argv[1]);
-    chprintf((BaseSequentialStream*)&SD1, "Channel set to %d.", channel);
+  if(*(argv[0]) == 'c'){
+    channel = strtol(argv[1], NULL, 0);
+    nrf24l01SetChannel(&nrf24l01, channel);
+    chprintf((BaseSequentialStream*)&SD1, "Channel set to %d.\n\r", channel);
   }
-  else if(*argv[0] == 'a'){
+
+  
+  else if(*(argv[0]) == 'a'){
     if(strlen(argv[1]) == 5){
       int i = 0;
+      uint8_t add[5];
       for(i; i<5; i++){
-      uint8_t[5] add = *argv[1]+i;
+	addr[i] = *(argv[1]+i);
       }
-      addr = add;
+      serialOutBuf[0] = msg_seq;
+      serialOutBuf[2] = addr[0];
+      serialOutBuf[3] = addr[1];
+      serialOutBuf[4] = addr[2];
+      serialOutBuf[5] = addr[3];
+      serialOutBuf[6] = addr[4];
+      nrf24l01SetRXAddress(&nrf24l01, 0, addr);
+      
+     
+      chprintf((BaseSequentialStream*)&SD1, "Personal Address set to %s.\n\r", addr);
+      
+      
+      //addr = add;
     }else {
       chprintf((BaseSequentialStream*)&SD1, "Not an appropriate length address.");
     }
   }
-  else if(*argv[0] == 't'){
-    target_addr = argv[1];
+
+
+
+  else if(*(argv[0]) == 't'){
+    int i=0;
+    for(i; i<5; i++){
+      target_addr[i] = *(argv[1] + i);
+    }
+    chprintf((BaseSequentialStream*)&SD1, "%s.\n\r", target_addr);
     //chprintf((BaseSequentialStream*)&SD1, "Sending...");
+    nrf24l01SetTXAddress(&nrf24l01, target_addr);
+    int msg_size = strlen(argv[2]);
+    serialOutBuf[0] = msg_seq;
+    serialOutBuf[7] = ',';
+    serialOutBuf[8] = msg_type;
+    serialOutBuf[9] = ',';
+    serialOutBuf[10] = msg_size;
+    serialOutBuf[11] = ',';
+
+    for(i=0;i<(msg_size);i++){
+      serialOutBuf[i+12] = *(argv[2] + i);
+    }
+    wait_for_ack = 1;
+    for(i=0; i<5; i++){
+      chMtxLock(&nrfMutex);
+      chnWriteTimeout(&nrf24l01.channels[0], serialOutBuf, 32, MS2ST(100));
+      chMtxUnlock(&nrfMutex);
+      chThdSleepMilliseconds(200);
+      if (!wait_for_ack) break;
+      chprintf((BaseSequentialStream*)&SD1, "failed to send %d\n\r", i);
+    }
+    msg_seq = msg_seq ^ 1;
+  }
+
+  else if(*(argv[0]) == 'r'){
+      if (*(argv[1]) == 'l'){
+	int i,j;
+	for(i=0; i<iter; i++){
+	  chprintf((BaseSequentialStream*)&SD1, "%d. <", i+1);
+	  for(j=0; j<5; j++){
+	    chprintf((BaseSequentialStream*)&SD1, "%c", rec_list[(iter-1)-i][j]);
+	  }
+	  chprintf((BaseSequentialStream*)&SD1, ">, <%d> \n\r", rec_list[(iter-1)-i][5]); 
+	}
+      }else{
+	int j;
+	fifo = (fifo+1)%10;
+	if(fifo != iter){
+	  for(j=0; j<5; j++){
+	    chprintf((BaseSequentialStream*)&SD1, "%c", rec_list[fifo][j]);
+	  }
+	  chprintf((BaseSequentialStream*)&SD1, ": " ); 
+	  for(j=0; j<(serialInBuf[10]);j++){
+	    chprintf((BaseSequentialStream*)&SD1, "%c ",  serialInBuf[12+j]);
+	  }
+	  chprintf((BaseSequentialStream*)&SD1, "\n\r");
+	}
+	for(j=0; j<26; j++){
+	rec_list[fifo][j] = 0;
+	}
+      }
   }
 }
-
-
-
 
 static void cmd_dataPrint(BaseSequentialStream *chp, int argc, char *argv[]) {
   int rows = 0;
@@ -367,7 +526,8 @@ static void cmd_gyro(BaseSequentialStream *chp, int argc, char *argv[]) {
 static void cmd_alti(BaseSequentialStream *chp, int argc, char *argv[]) {
  
   //=(1-(A18/1013.25)^0.190284)*145366.45
-  double altitude_ft = (1-pow((get_pressure()/1013.25),0.190284))*145366.45; //converts to Altitude measurement
+  double altitude_ft = (1-((get_pressure()/1013.25),0.190284))*145366.45; //converts to Altitude measurement
+  //took away pow
   int final_ft = (int) altitude_ft;//converts above value to int for printing purposes
 
   if(*argv[0] == 'f'){
@@ -415,52 +575,63 @@ static void termination_handler(eventid_t id) {
 static evhandler_t fhandlers[] = {
   termination_handler
 };
-/*
- * Application entry point.
- */
+
 int main(void) {
-  event_listener_t tel;
-  /*
-   * System initializations.
-   * - HAL initialization, this also initializes the configured device drivers
-   *   and performs the board-specific initializations.
-   * - Kernel initialization, the main() function becomes a thread and the
-   *   RTOS is active.
-   */
   halInit();
   chSysInit();
-  /*
-   * Activates the serial driver 1 using the driver default configuration.
-   * PC4(RX) and PC5(TX). The default baud rate is 9600.
-   */
+  uint8_t i;
+  event_listener_t tel;
+
+  // Serial Port Setup 
   sdStart(&SD1, NULL);
   palSetPadMode(GPIOC, 4, PAL_MODE_ALTERNATE(7));
   palSetPadMode(GPIOC, 5, PAL_MODE_ALTERNATE(7));
-  /* 
-   *  Setup the pins for the spi link on the GPIOA. This link connects to the pressure sensor and the gyro.  
-   * 
-   */
-  palSetPadMode(GPIOA, 5, PAL_MODE_ALTERNATE(5));     /* SCK. */
-  palSetPadMode(GPIOA, 6, PAL_MODE_ALTERNATE(5));     /* MISO.*/
-  palSetPadMode(GPIOA, 7, PAL_MODE_ALTERNATE(5));     /* MOSI.*/
-  palSetPadMode(GPIOA, 8, PAL_MODE_OUTPUT_PUSHPULL);  /* pressure sensor chip select */
-  palSetPadMode(GPIOE, 3, PAL_MODE_OUTPUT_PUSHPULL);  /* gyro chip select */
-  palSetPad(GPIOA, 8);                                /* Deassert the pressure sensor chip select */
-  palSetPad(GPIOE, 3);                                /* Deassert the gyro chip select */
+
+  chprintf((BaseSequentialStream*)&SD1, "Up and Running\n\r");
+
+  palSetPadMode(GPIOB, 3, PAL_MODE_ALTERNATE(6));     /* SCK. */
+  palSetPadMode(GPIOB, 4, PAL_MODE_ALTERNATE(6));     /* MISO.*/
+  palSetPadMode(GPIOB, 5, PAL_MODE_ALTERNATE(6));     /* MOSI.*/
+
+  palSetPadMode(GPIOC, GPIOC_PIN1, PAL_MODE_OUTPUT_PUSHPULL);
+  palSetPad(GPIOC, GPIOC_PIN1);
+  palSetPadMode(GPIOC, GPIOC_PIN2, PAL_MODE_OUTPUT_PUSHPULL);
+  palClearPad(GPIOC, GPIOC_PIN2);
+  palSetPadMode(GPIOC, GPIOC_PIN3, PAL_MODE_INPUT_PULLUP);
+
+  spiStart(&SPID3, &nrf24l01SPI);
+
+  chMtxObjectInit(&nrfMutex);
+
+  //FROM RX---
+  extStart(&EXTD1, &extcfg);
+  //---
+
+  nrf24l01ObjectInit(&nrf24l01);
+  nrf24l01Start(&nrf24l01, &nrf24l01Config);
+  
+  //FROM RX ---
+  extChannelEnable(&EXTD1, 3);
+  //-----
+  
+  initNRF24L01(&nrf24l01);
+
   chprintf((BaseSequentialStream*)&SD1, "\n\rUp and Running\n\r");
-  chprintf((BaseSequentialStream*)&SD1, "Gyro Whoami Byte = 0x%02x\n\r",gyro_read_register(0x0F));
-  /* Initialize the command shell */ 
   shellInit();
-  /* 
-   *  setup to listen for the shell_terminated event. This setup will be stored in the tel  * event listner structure in item 0
-  */
   chEvtRegister(&shell_terminated, &tel, 0);
   shelltp1 = shellCreate(&shell_cfg1, sizeof(waShell), NORMALPRIO);
-  //chThdCreateStatic(waCounterThread, sizeof(waCounterThread), NORMALPRIO+1, counterThread, NULL);
-  chThdCreateStatic(waButtonThread, sizeof(waButtonThread), NORMALPRIO+1, buttonThread, NULL);
-  chThdCreateStatic(waLogThread, sizeof(waLogThread), NORMALPRIO+1, logThread, NULL);
-  chThdCreateStatic(waBlinkerThread, sizeof(waBlinkerThread), NORMALPRIO+1, blinkerThread, NULL);
-  while (TRUE) {
-    chEvtDispatch(fhandlers, chEvtWaitOne(ALL_EVENTS));
+
+  //FROM RX---
+  chThdCreateStatic(recieverWorkingArea, sizeof(recieverWorkingArea), NORMALPRIO, receiverThread, NULL);
+  //FROM RX^^^^
+
+  /*
+  for (i=0;i<32;i++) {
+    serialOutBuf[i] = 3;
   }
- }
+  */
+
+  for (;;) {
+    chEvtDispatch(fhandlers, chEvtWaitOne(ALL_EVENTS));    
+  }
+}

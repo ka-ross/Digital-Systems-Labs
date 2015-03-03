@@ -153,36 +153,37 @@ static msg_t receiverThread(void *arg) {
 	} 
 	nrf24l01SetTXAddress(&nrf24l01, target_addr);
 	chMtxLock(&nrfMutex);
-	chnWriteTimeout(&nrf24l01.channels[0], serialInBuf, 32, MS2ST(100));
+	chnWriteTimeout(&nrf24l01.channels[0], serialInBuf, 32, MS2ST(100));//sending acknowledgement
 	chMtxUnlock(&nrfMutex);
+	
 
-	if(wait_for_ack){
-	  break;
-	}
-    
 	for(i=0;i<5; i++){
-	  rec_list[iter][i] = serialInBuf[2+i];
+	  rec_list[iter][i] = serialInBuf[2+i];//sender's address to rec_list
 	  } 
-	rec_list[iter][5] = serialInBuf[10];
+	rec_list[iter][5] = serialInBuf[10];//message length to rec_list
 	
 	for(i=0; i<(serialInBuf[10]);i++){
-	  rec_list[iter][6+i] = serialInBuf[12+i];
+	  rec_list[iter][6+i] = serialInBuf[12+i];//message to rec_list
 	}
 	
 	iter = (iter+1)%10;
-	
-	
-	for (i=0;i<(int)s;i++) {
-	  chprintf((BaseSequentialStream*)&SD1, "%c ", serialInBuf[i]);
+
+
+	for (i=0;i<5;i++) {
+	  chprintf((BaseSequentialStream*)&SD1, "%c", serialInBuf[2+i]);
+	}
+	chprintf((BaseSequentialStream*)&SD1, ": ", s);
+	for (i=0;i<(int)serialInBuf[10];i++) {
+	  chprintf((BaseSequentialStream*)&SD1, "%c", serialInBuf[12+i]);
 	}
 	chprintf((BaseSequentialStream*)&SD1, "\n\r", s);
-    
 	
       }
 
 
-      if(wait_for_ack){
-	if((serialInBuf[0] = msg_seq) && (serialInBuf[8]==1)){
+      if(wait_for_ack){//to receive ack.
+	//chprintf((BaseSequentialStream*)&SD1, "buf0 = %d, seq=%d, buf8=%d.\n\r", serialInBuf[0], msg_seq, serialInBuf[8]);
+	if((serialInBuf[0] == msg_seq) && (serialInBuf[8]==1)){
 	  wait_for_ack = 0;
 	  chprintf((BaseSequentialStream*)&SD1, "Acknowledged.\n\r");
 	  
@@ -430,28 +431,28 @@ static void cmd_nrf(BaseSequentialStream *chp, int argc, char *argv[]) {
       if (*(argv[1]) == 'l'){
 	int i,j;
 	for(i=0; i<iter; i++){
-	  chprintf((BaseSequentialStream*)&SD1, "%d. <", i+1);
-	  for(j=0; j<5; j++){
-	    chprintf((BaseSequentialStream*)&SD1, "%c", rec_list[(iter-1)-i][j]);
+	  if(rec_list[(iter-1)-i][j] != 0){
+	    chprintf((BaseSequentialStream*)&SD1, "%d. <", i+1);
+	    for(j=0; j<5; j++){
+	      chprintf((BaseSequentialStream*)&SD1, "%c", rec_list[(iter-1)-i][j]);
+	    }
+	    chprintf((BaseSequentialStream*)&SD1, ">, <%d> \n\r", rec_list[(iter-1)-i][5]); 
 	  }
-	  chprintf((BaseSequentialStream*)&SD1, ">, <%d> \n\r", rec_list[(iter-1)-i][5]); 
 	}
       }else{
 	int j;
-	fifo = (fifo+1)%10;
-	if(fifo != iter){
 	  for(j=0; j<5; j++){
-	    chprintf((BaseSequentialStream*)&SD1, "%c", rec_list[fifo][j]);
-	  }
+	    chprintf((BaseSequentialStream*)&SD1, "%c", rec_list[fifo][j]);//address
 	  chprintf((BaseSequentialStream*)&SD1, ": " ); 
-	  for(j=0; j<(serialInBuf[10]);j++){
-	    chprintf((BaseSequentialStream*)&SD1, "%c ",  serialInBuf[12+j]);
+	  for(j=0; j<20;j++){
+	    chprintf((BaseSequentialStream*)&SD1, "%c",  rec_list[fifo][6+j]);//message
 	  }
 	  chprintf((BaseSequentialStream*)&SD1, "\n\r");
 	}
 	for(j=0; j<26; j++){
 	rec_list[fifo][j] = 0;
 	}
+	fifo = (fifo+1)%10;
       }
   }
 }
